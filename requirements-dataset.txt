@@ -1,0 +1,7 @@
+# Opsional, hanya di Master:
+#   - osmium : prepare_dataset.py (.osm.pbf -> .npy)
+#   - pandas + pyarrow : --dataset file.csv / file.parquet
+-r requirements.txt
+osmium>=4.0
+pandas>=2.0
+pyarrow>=14.0

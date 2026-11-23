@@ -10,7 +10,13 @@ Tema 6. Python 3.10+, `numpy`, `psutil`. Tiga file harus ada di **setiap** PC (M
 | `prepare_dataset.py` | hanya di Master, dijalankan sekali: mengubah data OpenStreetMap Indonesia menjadi `.npy` |
 
 ```
-pip install numpy psutil
+python -m pip install -r requirements.txt              # atau: pip install numpy psutil
+python -m pip install -r requirements-dataset.txt      # opsional: PBF / CSV / Parquet
+```
+
+## Menjalankan tes
+```
+python -m unittest discover -s tests -v
 ```
 
 ## Persiapan jaringan

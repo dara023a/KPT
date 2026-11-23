@@ -762,7 +762,8 @@ def main():
     ap.add_argument("--dtype", choices=["int32", "int64"], default="int32")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--algo", choices=ALGOS, default="timsort")
-    ap.add_argument("--repeat", type=int, default=3)
+    ap.add_argument("--repeat", type=int, default=None,
+                    help="jumlah pengulangan (default: 1 untuk dist, 3 untuk mode lain)")
     ap.add_argument("--csv", default="results.csv", help="file CSV hasil ('' = tidak menyimpan)")
     ap.add_argument("--procs", default="1,2,4,8", help="[local] daftar jumlah proses")
     ap.add_argument("--hosts", default="", help="[dist/bench] ip[:port],ip[:port],... (lewati discovery)")
@@ -781,8 +782,10 @@ def main():
     if args.timeout < 2.0:
         ap.error("--timeout minimal 2 detik (heartbeat worker dikirim tiap 1 detik)")
     HB_TIMEOUT = args.timeout
-    if args.cmd == "dist" and args.repeat == 3:
-        args.repeat = 1
+    if args.repeat is None:
+        args.repeat = 1 if args.cmd == "dist" else 3
+    elif args.repeat < 1:
+        ap.error("--repeat minimal 1")
 
     print("=" * 70)
     print("      DISTRIBUTED SORTING - MASTER NODE")
