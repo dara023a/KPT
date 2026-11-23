@@ -28,6 +28,57 @@ pip install numpy psutil
 6. **Merge**: `--merge master` (Master menggabungkan semua) atau `--merge tiered` (chunk digabung dulu di worker, Master hanya merge terakhir).
 7. **Verifikasi** otomatis: hasil terurut + jumlah elemen + checksum (sum dan sum kuadrat) sama dengan data asli.
 
+## Penjelasan: apa yang diurutkan dan bagaimana caranya
+**Tugas.** Mengurutkan jutaan angka dari kecil ke besar. Pada proyek ini angkanya adalah *latitude* node peta OpenStreetMap Indonesia. Cara membandingkannya sama seperti mengurutkan angka biasa (8, 4, 3, 7, 5 menjadi 3, 4, 5, 7, 8).
+
+**Latitude sebagai kunci sort.** Latitude disimpan sebagai bilangan bulat (derajat x 10.000.000) agar lebih cepat diurutkan dan hemat memori; urutannya tidak berubah. Sebagian besar wilayah Indonesia berada di selatan khatulistiwa, sehingga nilainya negatif (-7 lebih kecil dari -6). Urutan kecil ke besar berarti dari titik paling selatan ke paling utara.
+
+| Kota (perkiraan, ilustrasi) | Latitude | Disimpan sebagai |
+|---|---|---|
+| Yogyakarta | -7,7956 | -77.956.000 |
+| Surabaya | -7,2575 | -72.575.000 |
+| Semarang | -6,9932 | -69.932.000 |
+| Bandung | -6,9175 | -69.175.000 |
+| Jakarta | -6,2088 | -62.088.000 |
+
+**Cara kerja (merge sort terdistribusi).** Contoh 8 angka dan 2 Worker:
+```
+Data asli       : [9, 3, 7, 1, 8, 2, 6, 4]
+1. Master membagi data (task decomposition)
+   Chunk A      : [9, 3, 7, 1]  -> Worker 1
+   Chunk B      : [8, 2, 6, 4]  -> Worker 2
+2. Worker mengurutkan chunk masing-masing secara bersamaan (fase paralel)
+   Worker 1     : [1, 3, 7, 9]
+   Worker 2     : [2, 4, 6, 8]
+3. Master menggabungkan dua daftar terurut (merge, fase serial)
+   Hasil akhir  : [1, 2, 3, 4, 6, 7, 8, 9]
+```
+Merge cepat karena kedua daftar sudah terurut: bandingkan angka terdepan tiap daftar, ambil yang lebih kecil, ulangi.
+
+**Dua fase dan kaitannya dengan analisis kinerja.**
+- Fase 1 (sort chunk) berjalan paralel di semua Worker dan semua core. Di sinilah speedup didapat.
+- Fase 2 (merge akhir di Master) bersifat serial. Bagian ini membatasi speedup (Hukum Amdahl, Pertemuan 7). Opsi `--merge tiered` menggabungkan hasil bertingkat di Worker untuk memperkecil bagian serial ini.
+
+**Letak logika sorting di kode.**
+
+| Bagian | File dan fungsi |
+|---|---|
+| Pembagian data menjadi chunk | `master_sort.py`: `build_sort_tasks` |
+| Penjadwalan, deteksi Worker mati, requeue | `master_sort.py`: `Runner` |
+| Alur satu job dan merge akhir | `master_sort.py`: `run_dist` |
+| Sort satu potongan data (`--algo`) | `common.py`: `sort_part` |
+| Menggabungkan dua / banyak daftar terurut | `common.py`: `merge_two`, `merge_many` |
+| Sort paralel di satu komputer | `common.py`: `parallel_sort_local` |
+| Sort chunk di Worker (bagi per core lalu merge lokal) | `worker_sort.py`: `do_sort` |
+| Baseline sequential | `master_sort.py`: `cmd_seq` |
+
+**Alur satu job.**
+```
+Master: data -> pecah jadi chunk -> kirim ke Worker
+Worker: chunk -> bagi per core -> sort paralel -> merge lokal -> kirim balik
+Master: kumpulkan chunk terurut -> merge akhir -> verifikasi (terurut, jumlah dan checksum sama)
+```
+
 ## Dataset publik (Indonesia)
 Sumber: **OpenStreetMap Indonesia dari Geofabrik** (https://download.geofabrik.de/asia/indonesia.html).
 Tersedia per pulau (java, sumatra, kalimantan, sulawesi, ...) dalam format `.osm.pbf`. Lisensi ODbL:
