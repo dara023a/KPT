@@ -1,18 +1,39 @@
 # Distributed Sorting (Master–Worker) — UAS Komputasi Paralel dan Sistem Terdistribusi
 
-Tema 6. Python 3.10+, `numpy`, `psutil`. Tiga file harus ada di **setiap** PC (Master dan Worker):
+Tema 6. Python 3.10+, `numpy`, `psutil`. Salin **seluruh folder** ke setiap PC (Master dan Worker). Kode kanonik ada di `src/`; wrapper di root dibuat supaya perintah lama tetap bekerja.
 
 | File | Peran |
 |---|---|
-| `common.py` | protokol framing, algoritma sort, merge, checksum |
-| `worker_sort.py` | dijalankan di 9 PC Worker |
-| `master_sort.py` | dijalankan di 1 PC Master (seq / local / dist / bench) |
-| `prepare_dataset.py` | hanya di Master, dijalankan sekali: mengubah data OpenStreetMap Indonesia menjadi `.npy` |
+| `src/common.py` | protokol framing, algoritma sort, merge, checksum |
+| `src/worker_sort.py` (`worker_sort.py`) | dijalankan di 9 PC Worker |
+| `src/master_sort.py` (`master_sort.py`) | dijalankan di 1 PC Master (seq / local / dist / bench) |
+| `src/prepare_dataset.py` (`prepare_dataset.py`) | hanya di Master, dijalankan sekali: mengubah data OpenStreetMap Indonesia menjadi `.npy` |
 
 ```
 python -m pip install -r requirements.txt              # atau: pip install numpy psutil
 python -m pip install -r requirements-dataset.txt      # opsional: PBF / CSV / Parquet
 ```
+
+## Struktur repo
+```
+.
+├── master_sort.py, worker_sort.py, prepare_dataset.py, common.py   # wrapper root
+├── src/                    # implementasi kanonik
+│   ├── common.py
+│   ├── master_sort.py
+│   ├── worker_sort.py
+│   └── prepare_dataset.py
+├── tests/                  # unittest + integrasi loopback
+├── config/nodes.example.json
+├── results/raw/            # CSV hasil (default --csv)
+├── results/figures/        # grafik untuk laporan
+├── docs/                   # laporan & bukti node
+├── scripts/                # run_master.ps1, run_worker.ps1
+├── requirements.txt
+├── requirements-dataset.txt
+└── data/                   # opsional; .pbf/.npy diabaikan git
+```
+Perintah lama seperti `python master_sort.py dist ...` tetap bekerja lewat wrapper. Hasil baru ditulis ke `results/raw/results.csv`; `results.csv` di root adalah hasil lama yang dibiarkan.
 
 ## Menjalankan tes
 ```
@@ -21,9 +42,10 @@ python -m unittest discover -s tests -v
 
 ## Persiapan jaringan
 - Semua PC satu subnet. Di **Worker**: izinkan inbound **TCP 9998** dan **UDP 9999** (Windows Firewall).
-- Worker: `python worker_sort.py` (tampil hostname, jumlah core, port).
+- Worker: `python worker_sort.py` (tampil hostname, jumlah core, port). Alternatif PowerShell: `powershell -File scripts\run_worker.ps1 -Port 9998`.
 - Master mencari worker lewat UDP broadcast + TCP sweep (seperti kode Bapak). Jika diblokir router, pakai
-  `--hosts 192.168.1.11,192.168.1.12,...`.
+  `--hosts 192.168.1.11,192.168.1.12,...`. Alternatif: `powershell -File scripts\run_master.ps1 -Mode dist -Size 10m -Hosts 192.168.1.11,192.168.1.12`.
+- Contoh inventaris 9 worker ada di `config/nodes.example.json` (referensi untuk `--hosts`, belum dibaca otomatis).
 
 ## Alur sistem
 1. Master memuat dataset publik (`--dataset`, lihat bagian Dataset) atau, bila tidak diberikan, membangkitkan data sintetis (`numpy.random.default_rng(seed)`).
@@ -69,14 +91,14 @@ Merge cepat karena kedua daftar sudah terurut: bandingkan angka terdepan tiap da
 
 | Bagian | File dan fungsi |
 |---|---|
-| Pembagian data menjadi chunk | `master_sort.py`: `build_sort_tasks` |
-| Penjadwalan, deteksi Worker mati, requeue | `master_sort.py`: `Runner` |
-| Alur satu job dan merge akhir | `master_sort.py`: `run_dist` |
-| Sort satu potongan data (`--algo`) | `common.py`: `sort_part` |
-| Menggabungkan dua / banyak daftar terurut | `common.py`: `merge_two`, `merge_many` |
-| Sort paralel di satu komputer | `common.py`: `parallel_sort_local` |
-| Sort chunk di Worker (bagi per core lalu merge lokal) | `worker_sort.py`: `do_sort` |
-| Baseline sequential | `master_sort.py`: `cmd_seq` |
+| Pembagian data menjadi chunk | `src/master_sort.py`: `build_sort_tasks` |
+| Penjadwalan, deteksi Worker mati, requeue | `src/master_sort.py`: `Runner` |
+| Alur satu job dan merge akhir | `src/master_sort.py`: `run_dist` |
+| Sort satu potongan data (`--algo`) | `src/common.py`: `sort_part` |
+| Menggabungkan dua / banyak daftar terurut | `src/common.py`: `merge_two`, `merge_many` |
+| Sort paralel di satu komputer | `src/common.py`: `parallel_sort_local` |
+| Sort chunk di Worker (bagi per core lalu merge lokal) | `src/worker_sort.py`: `do_sort` |
+| Baseline sequential | `src/master_sort.py`: `cmd_seq` |
 
 **Alur satu job.**
 ```
@@ -104,7 +126,7 @@ python master_sort.py dist --dataset osm_java_lat.npy --shuffle --size 20m
 - Dataset juga bisa dari `.csv` / `.parquet`: `--dataset file.parquet --column nama_kolom` (butuh pandas, pyarrow). Kolom float dikali 1e6 lalu dibulatkan ke int64.
 - Dataset hanya dibutuhkan di **Master**; Worker menerima chunk lewat jaringan.
 - Catat di BAB III: nama file, tanggal unduh, jumlah elemen, dtype, kunci sort, dan apakah `--shuffle` dipakai.
-- Status: `prepare_dataset.py` belum diuji dengan file PBF asli (sandbox tanpa internet dan tanpa paket osmium). Jalankan uji `--limit 1000000` dulu. Bagian loader `.npy`/`.csv`/`.parquet` di Master sudah diuji.
+- Status: `src/prepare_dataset.py` belum diuji dengan file PBF asli (sandbox tanpa internet dan tanpa paket osmium). Jalankan uji `--limit 1000000` dulu. Bagian loader `.npy`/`.csv`/`.parquet` di Master sudah diuji.
 
 ## Parameter tambahan
 - `--timeout N` (min 2): detik tanpa heartbeat sebelum Worker dianggap mati (default 5). Untuk membahas false positive/negative dan kecepatan recovery (Pertemuan 13 slide 16), ulangi uji fault tolerance dengan `--timeout 2`, `5`, dan `10`.
@@ -114,7 +136,7 @@ python master_sort.py dist --dataset osm_java_lat.npy --shuffle --size 20m
 - **Windows (Master/Worker)**: izinkan Python di Windows Firewall (TCP 9998, UDP 9999). Jalankan di terminal biasa; `multiprocessing` butuh skrip dijalankan sebagai file (sudah memakai `if __name__ == "__main__"`).
 - **Termux (HP, Worker)**: `pkg install python python-numpy`; `psutil` bersifat opsional (tanpa psutil, kolom CPU/memori Worker kosong). Gunakan `--procs` sesuai jumlah core HP, dan matikan mode hemat baterai atau aktifkan wake lock agar proses tidak dibekukan.
 - Hotspot atau jaringan Wi-Fi sering memblokir UDP broadcast: jalankan Master dengan `--hosts IP_WORKER1,IP_WORKER2` (atau `ip:port`).
-- Python dan versi NumPy tidak harus sama, tetapi `common.py` harus identik di semua perangkat.
+- Python dan versi NumPy tidak harus sama, tetapi `src/common.py` harus identik di semua perangkat.
 
 ## Pilih algoritma (`--algo`) — tulis alasannya di BAB III
 | Algo | Sifat | Dipakai untuk |

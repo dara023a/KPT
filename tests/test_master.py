@@ -4,8 +4,8 @@ import unittest
 
 import numpy as np
 
-from common import checksum
-from master_sort import Worker, build_sort_tasks, load_dataset, parse_size
+from src.common import checksum
+from src.master_sort import Worker, build_sort_tasks, load_dataset, parse_size
 
 
 class TestUtils(unittest.TestCase):

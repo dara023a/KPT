@@ -1,0 +1,14 @@
+{
+  "catatan": "Contoh inventaris node. Master belum membaca file ini otomatis; salin IP ke argumen --hosts.",
+  "workers": [
+    {"host": "worker-01", "ip": "192.168.1.11", "port": 9998, "cores": 8},
+    {"host": "worker-02", "ip": "192.168.1.12", "port": 9998, "cores": 8},
+    {"host": "worker-03", "ip": "192.168.1.13", "port": 9998, "cores": 8},
+    {"host": "worker-04", "ip": "192.168.1.14", "port": 9998, "cores": 8},
+    {"host": "worker-05", "ip": "192.168.1.15", "port": 9998, "cores": 8},
+    {"host": "worker-06", "ip": "192.168.1.16", "port": 9998, "cores": 8},
+    {"host": "worker-07", "ip": "192.168.1.17", "port": 9998, "cores": 8},
+    {"host": "worker-08", "ip": "192.168.1.18", "port": 9998, "cores": 8},
+    {"host": "worker-09", "ip": "192.168.1.19", "port": 9998, "cores": 8}
+  ]
+}

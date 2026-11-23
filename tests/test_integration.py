@@ -9,7 +9,7 @@ import unittest
 
 import psutil
 
-from master_sort import probe
+from src.master_sort import probe
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MASTER = os.path.join(ROOT, "master_sort.py")

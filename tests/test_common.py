@@ -3,8 +3,8 @@ import unittest
 
 import numpy as np
 
-from common import (ALGOS, checksum, is_sorted, merge_many, merge_two,
-                    recv_frame, send_frame, sort_part)
+from src.common import (ALGOS, checksum, is_sorted, merge_many, merge_two,
+                        recv_frame, send_frame, sort_part)
 
 
 class TestSorting(unittest.TestCase):
