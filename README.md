@@ -1,13 +1,13 @@
 # Distributed Sorting (Master–Worker) — UAS Komputasi Paralel dan Sistem Terdistribusi
 
-Tema 6. Python 3.10+, `numpy`, `psutil`. Salin **seluruh folder** ke setiap PC (Master dan Worker). Kode kanonik ada di `src/`; wrapper di root dibuat supaya perintah lama tetap bekerja.
+Tema 6. Python 3.10+, `numpy`, `psutil`. Salin **seluruh folder** ke setiap PC (Master dan Worker). Jalankan program sebagai modul dari root repo, mis. `python -m src.master_sort ...`.
 
 | File | Peran |
 |---|---|
 | `src/common.py` | protokol framing, algoritma sort, merge, checksum |
-| `src/worker_sort.py` (`worker_sort.py`) | dijalankan di 9 PC Worker |
-| `src/master_sort.py` (`master_sort.py`) | dijalankan di 1 PC Master (seq / local / dist / bench) |
-| `src/prepare_dataset.py` (`prepare_dataset.py`) | hanya di Master, dijalankan sekali: mengubah data OpenStreetMap Indonesia menjadi `.npy` |
+| `src/worker_sort.py` | dijalankan di 9 PC Worker |
+| `src/master_sort.py` | dijalankan di 1 PC Master (seq / local / dist / bench) |
+| `src/prepare_dataset.py` | hanya di Master, dijalankan sekali: mengubah data OpenStreetMap Indonesia menjadi `.npy` |
 
 ```
 python -m pip install -r requirements.txt              # atau: pip install numpy psutil
@@ -17,8 +17,8 @@ python -m pip install -r requirements-dataset.txt      # opsional: PBF / CSV / P
 ## Struktur repo
 ```
 .
-├── master_sort.py, worker_sort.py, prepare_dataset.py, common.py   # wrapper root
 ├── src/                    # implementasi kanonik
+│   ├── __init__.py
 │   ├── common.py
 │   ├── master_sort.py
 │   ├── worker_sort.py
@@ -33,7 +33,7 @@ python -m pip install -r requirements-dataset.txt      # opsional: PBF / CSV / P
 ├── requirements-dataset.txt
 └── data/                   # opsional; .pbf/.npy diabaikan git
 ```
-Perintah lama seperti `python master_sort.py dist ...` tetap bekerja lewat wrapper. Hasil baru ditulis ke `results/raw/results.csv`; `results.csv` di root adalah hasil lama yang dibiarkan.
+Jalankan dari root repo agar paket `src` dikenali. Hasil baru ditulis ke `results/raw/results.csv`; `results.csv` di root adalah hasil lama yang dibiarkan.
 
 ## Menjalankan tes
 ```
@@ -42,7 +42,7 @@ python -m unittest discover -s tests -v
 
 ## Persiapan jaringan
 - Semua PC satu subnet. Di **Worker**: izinkan inbound **TCP 9998** dan **UDP 9999** (Windows Firewall).
-- Worker: `python worker_sort.py` (tampil hostname, jumlah core, port). Alternatif PowerShell: `powershell -File scripts\run_worker.ps1 -Port 9998`.
+- Worker: `python -m src.worker_sort` (tampil hostname, jumlah core, port). Alternatif PowerShell: `powershell -File scripts\run_worker.ps1 -Port 9998`.
 - Master mencari worker lewat UDP broadcast + TCP sweep (seperti kode Bapak). Jika diblokir router, pakai
   `--hosts 192.168.1.11,192.168.1.12,...`. Alternatif: `powershell -File scripts\run_master.ps1 -Mode dist -Size 10m -Hosts 192.168.1.11,192.168.1.12`.
 - Contoh inventaris 9 worker ada di `config/nodes.example.json` (referensi untuk `--hosts`, belum dibaca otomatis).
@@ -116,11 +116,11 @@ cantumkan "(c) OpenStreetMap contributors" di laporan. Kunci sort: latitude node
 pip install osmium numpy                       # hanya di Master
 # 1) unduh file .osm.pbf (mis. java-latest.osm.pbf) dari halaman Geofabrik di atas
 # 2) uji kecil dulu (1 juta node), lalu data penuh
-python prepare_dataset.py --pbf java-latest.osm.pbf --key lat --limit 1000000 --out tes.npy
-python prepare_dataset.py --pbf java-latest.osm.pbf --key lat --out osm_java_lat.npy
+python -m src.prepare_dataset --pbf java-latest.osm.pbf --key lat --limit 1000000 --out tes.npy
+python -m src.prepare_dataset --pbf java-latest.osm.pbf --key lat --out osm_java_lat.npy
 # 3) pakai di semua pengujian (acak urutan agar tidak terurut berdasarkan ID)
-python master_sort.py seq  --dataset osm_java_lat.npy --shuffle --size 20m
-python master_sort.py dist --dataset osm_java_lat.npy --shuffle --size 20m
+python -m src.master_sort seq  --dataset osm_java_lat.npy --shuffle --size 20m
+python -m src.master_sort dist --dataset osm_java_lat.npy --shuffle --size 20m
 ```
 - `--size` memotong dataset (mis. 20m); tanpa `--size` seluruh dataset dipakai. Gunakan **nilai yang sama** di semua uji.
 - Dataset juga bisa dari `.csv` / `.parquet`: `--dataset file.parquet --column nama_kolom` (butuh pandas, pyarrow). Kolom float dikali 1e6 lalu dibulatkan ke int64.
@@ -150,27 +150,27 @@ Gunakan `--size` dan `--dataset` yang sama di semua uji (mis. `20m`; tambah jika
 
 ```bash
 # a. Sequential (baseline)
-python master_sort.py seq --size 10m --repeat 3
+python -m src.master_sort seq --size 10m --repeat 3
 
 # b. Local parallel (1 komputer)
-python master_sort.py local --size 10m --procs 1,2,4,8 --repeat 3
+python -m src.master_sort local --size 10m --procs 1,2,4,8 --repeat 3
 
 # c. Distributed
-python master_sort.py dist --size 10m
+python -m src.master_sort dist --size 10m
 
-# d. Dynamic load balancing: jalankan SATU worker dengan  python worker_sort.py --slowdown 3
-python master_sort.py bench --suite schedule --size 10m --repeat 3      # static vs dynamic
+# d. Dynamic load balancing: jalankan SATU worker dengan  python -m src.worker_sort --slowdown 3
+python -m src.master_sort bench --suite schedule --size 10m --repeat 3      # static vs dynamic
 
 # e. Fault tolerance (pilih salah satu cara membuat worker gagal)
-#    1) python worker_sort.py --crash-after 2     (crash otomatis saat task ke-2)
+#    1) python -m src.worker_sort --crash-after 2     (crash otomatis saat task ke-2)
 #    2) tutup worker (Ctrl+C / kill) atau cabut kabel saat job berjalan
-python master_sort.py dist --size 10m           # lihat [DOWN] [REQUEUE] [RECOVERED] [REJOIN]
+python -m src.master_sort dist --size 10m           # lihat [DOWN] [REQUEUE] [RECOVERED] [REJOIN]
 
 # f. Scalability
-python master_sort.py bench --suite scalability --workers-list 1,2,4,6,9 --repeat 3
+python -m src.master_sort bench --suite scalability --workers-list 1,2,4,6,9 --repeat 3
 
 # tambahan analisis: merge di Master vs bertingkat
-python master_sort.py bench --suite merge --size 10m --repeat 3
+python -m src.master_sort bench --suite merge --size 10m --repeat 3
 ```
 
 ## Metrik dan definisi (untuk BAB III/IV)

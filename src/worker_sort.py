@@ -1,7 +1,7 @@
 # worker_sort.py  (jalankan di setiap PC Worker)
-#   python worker_sort.py
-#   python worker_sort.py --slowdown 3          # simulasi worker lambat (uji load balancing)
-#   python worker_sort.py --crash-after 2       # simulasi crash saat task ke-2 (uji fault tolerance)
+#   python -m src.worker_sort
+#   python -m src.worker_sort --slowdown 3          # simulasi worker lambat (uji load balancing)
+#   python -m src.worker_sort --crash-after 2       # simulasi crash saat task ke-2 (uji fault tolerance)
 import argparse
 import json
 import os

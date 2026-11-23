@@ -12,8 +12,6 @@ import psutil
 from src.master_sort import probe
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MASTER = os.path.join(ROOT, "master_sort.py")
-WORKER = os.path.join(ROOT, "worker_sort.py")
 
 
 def free_port():
@@ -37,7 +35,7 @@ def stop_worker(proc):
 
 
 def run_master(args, csv_path):
-    cmd = [sys.executable, MASTER] + args + ["--csv", csv_path]
+    cmd = [sys.executable, "-m", "src.master_sort"] + args + ["--csv", csv_path]
     return subprocess.run(cmd, cwd=ROOT, text=True, encoding="utf-8", errors="replace",
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
 
@@ -64,7 +62,7 @@ class TestIntegration(unittest.TestCase):
     def test_dist_honors_explicit_repeat(self):
         port = free_port()
         proc = subprocess.Popen(
-            [sys.executable, "-u", WORKER, "--port", str(port), "--procs", "2"],
+            [sys.executable, "-u", "-m", "src.worker_sort", "--port", str(port), "--procs", "2"],
             cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             deadline = time.time() + 15

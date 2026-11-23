@@ -10,10 +10,17 @@ param(
     [string]$Suite = "scalability"
 )
 
+$root = Split-Path -Parent $PSScriptRoot
 $masterArgs = @($Mode, "--size", $Size)
 if ($Hosts) { $masterArgs += @("--hosts", $Hosts) }
 if ($Repeat -gt 0) { $masterArgs += @("--repeat", $Repeat) }
 if ($Dataset) { $masterArgs += @("--dataset", $Dataset) }
 if ($Mode -eq "bench") { $masterArgs += @("--suite", $Suite) }
 
-python (Join-Path $PSScriptRoot "..\master_sort.py") @masterArgs
+Push-Location $root
+try {
+    python -m src.master_sort @masterArgs
+}
+finally {
+    Pop-Location
+}

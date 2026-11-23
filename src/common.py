@@ -1,4 +1,4 @@
-# common.py  -- dipakai oleh master_sort.py DAN worker_sort.py
+# src/common.py -- dipakai oleh src/master_sort.py DAN src/worker_sort.py
 # Berisi: protokol jaringan (framing), algoritma sorting, merge, checksum.
 import json
 import struct

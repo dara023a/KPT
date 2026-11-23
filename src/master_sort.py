@@ -1,16 +1,16 @@
 # master_sort.py  (jalankan di PC Master)
 #
-#   python master_sort.py seq   --size 10m
-#   python master_sort.py local --size 10m --procs 1,2,4,8
-#   python master_sort.py dist  --size 10m                      # auto-discovery
-#   python master_sort.py dist  --size 10m --hosts 192.168.1.11,192.168.1.12
-#   python master_sort.py dist  --size 10m --schedule static    # tanpa load balancing dinamis
-#   python master_sort.py dist  --size 10m --merge tiered       # merge bertingkat di worker
-#   python master_sort.py bench --suite scalability --workers-list 1,2,4,6,9 --repeat 3
-#   python master_sort.py bench --suite schedule
-#   python master_sort.py bench --suite merge
-#   python master_sort.py bench --suite granularity --cpw-list 1,2,4,8,16
-#   python master_sort.py dist  --dataset osm_java_lat.npy --timeout 2   # dataset publik + timeout failure detector
+#   python -m src.master_sort seq   --size 10m
+#   python -m src.master_sort local --size 10m --procs 1,2,4,8
+#   python -m src.master_sort dist  --size 10m                      # auto-discovery
+#   python -m src.master_sort dist  --size 10m --hosts 192.168.1.11,192.168.1.12
+#   python -m src.master_sort dist  --size 10m --schedule static    # tanpa load balancing dinamis
+#   python -m src.master_sort dist  --size 10m --merge tiered       # merge bertingkat di worker
+#   python -m src.master_sort bench --suite scalability --workers-list 1,2,4,6,9 --repeat 3
+#   python -m src.master_sort bench --suite schedule
+#   python -m src.master_sort bench --suite merge
+#   python -m src.master_sort bench --suite granularity --cpw-list 1,2,4,8,16
+#   python -m src.master_sort dist  --dataset osm_java_lat.npy --timeout 2   # dataset publik + timeout failure detector
 import argparse
 import copy
 import csv
@@ -613,7 +613,7 @@ def cmd_local(args, data, ref_ck):
 def cmd_dist(args, data, ref_ck):
     ws = get_workers(args)
     if not ws:
-        print("[-] Tidak ada worker. Jalankan worker_sort.py di PC worker, atau pakai --hosts.")
+        print("[-] Tidak ada worker. Jalankan python -m src.worker_sort di PC worker, atau pakai --hosts.")
         return
     if args.workers:
         ws = ws[:args.workers]
@@ -754,7 +754,7 @@ def main():
     ap.add_argument("--size", default=None,
                     help="jumlah elemen, mis. 10m, 50000000 (default: 10m data sintetis / seluruh dataset)")
     ap.add_argument("--dataset", default="",
-                    help="file dataset publik (.npy hasil prepare_dataset.py, atau .csv/.parquet + --column)")
+                    help="file dataset publik (.npy hasil python -m src.prepare_dataset, atau .csv/.parquet + --column)")
     ap.add_argument("--column", default="", help="nama kolom untuk .csv/.parquet")
     ap.add_argument("--shuffle", action="store_true", help="acak urutan dataset (seed = --seed)")
     ap.add_argument("--timeout", type=float, default=HEARTBEAT_TIMEOUT,

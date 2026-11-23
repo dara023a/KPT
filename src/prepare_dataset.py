@@ -1,16 +1,16 @@
 # prepare_dataset.py  (dijalankan SEKALI di PC Master, bukan di Worker)
 #
 # Mengubah file OpenStreetMap (.osm.pbf) Indonesia dari Geofabrik menjadi array numerik .npy
-# yang dipakai master_sort.py:  python master_sort.py dist --dataset osm_java_lat.npy
+# yang dipakai src/master_sort.py:  python -m src.master_sort dist --dataset osm_java_lat.npy
 #
 # Sumber data  : OpenStreetMap contributors, diunduh dari Geofabrik
 #                https://download.geofabrik.de/asia/indonesia.html
 #                (lisensi ODbL; cantumkan "(c) OpenStreetMap contributors" di laporan)
-# Instalasi    : pip install osmium numpy
+# Instalasi    : python -m pip install -r requirements-dataset.txt
 #
 # Contoh:
-#   python prepare_dataset.py --pbf java-latest.osm.pbf --key lat --out osm_java_lat.npy
-#   python prepare_dataset.py --pbf java-latest.osm.pbf --key lat --limit 1000000 --out tes.npy   # uji kecil dulu
+#   python -m src.prepare_dataset --pbf java-latest.osm.pbf --key lat --out osm_java_lat.npy
+#   python -m src.prepare_dataset --pbf java-latest.osm.pbf --key lat --limit 1000000 --out tes.npy   # uji kecil dulu
 #
 # --key:
 #   lat : latitude  x 1e7 (int32)   <- kunci sort yang disarankan
