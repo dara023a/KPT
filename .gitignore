@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+java-latest.osm.pbf
+osm_java_lat.npy
+*.npy
