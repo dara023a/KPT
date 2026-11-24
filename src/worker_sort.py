@@ -126,11 +126,17 @@ def handle_connection(conn, addr, ctx):
             with ctx.compute_lock:
                 ctx.task_no += 1
                 no = ctx.task_no
-                print(f"[+] TASK {task_id} ({action}) dari {addr[0]} | "
-                      f"{len(arr):,} elemen | {ctx.procs} proses | algo={algo}")
+                print("\n" + "=" * 60)
+                print(f"[+] TASK {task_id} ({action.upper()}) DITERIMA DARI MASTER {addr[0]}")
+                print("=" * 60)
+                print(f"[*] Elemen    : {len(arr):,}")
+                print(f"[*] Multi-Core: Mengaktifkan SELURUH {ctx.procs} Proses CPU...")
+                print(f"[*] Algoritma : {algo}")
+                print("[*] Status    : COMPUTING...")
+                print("-" * 60)
 
                 if ctx.crash_after and no == ctx.crash_after:
-                    print(f"[!!] SIMULASI CRASH: proses akan mati dalam {ctx.crash_delay}s "
+                    print(f"[!] SIMULASI CRASH: proses akan mati dalam {ctx.crash_delay}s "
                           f"(t={time.strftime('%H:%M:%S')})")
                     threading.Timer(ctx.crash_delay, lambda: os._exit(1)).start()
 
@@ -169,10 +175,15 @@ def handle_connection(conn, addr, ctx):
                 "mem_peak_mb": max(mem_samples) if mem_samples else rss_tree_mb(),
             }
             send_frame(conn, result, out, lock=send_lock)
-            print(f"[OK] TASK {task_id} selesai | compute={dur:.2f}s")
+            print(f"[✓] TASK {task_id} SELESAI | {len(out):,} elemen hasil | "
+                  f"{ctx.procs} proses | compute={dur:.2f}s")
+            print("=" * 60)
+            print("[*] Status    : Menunggu task berikutnya dari Master...")
         except Exception as e:
             stop.set()
-            print(f"[-] TASK {task_id} gagal: {e}")
+            print(f"[✗] TASK {task_id} GAGAL: {e}")
+            print("=" * 60)
+            print("[*] Status    : Menunggu task berikutnya dari Master...")
             try:
                 send_frame(conn, {"type": "error", "task_id": task_id, "error": str(e)},
                            lock=send_lock)
@@ -196,17 +207,18 @@ def main():
 
     threading.Thread(target=udp_discovery_responder, args=(ctx,), daemon=True).start()
 
-    print("=" * 62)
-    print("      WORKER NODE - DISTRIBUTED SORTING")
-    print("=" * 62)
+    print("=" * 60)
+    print("      HEAVY PARALLEL WORKER NODE (MULTI-CORE READY)")
+    print("=" * 60)
     print(f"[*] Hostname : {socket.gethostname()}")
-    print(f"[*] Proses   : {ctx.procs} (multiprocessing)")
+    print(f"[*] Kapasitas: {ctx.procs} Core CPU (Siap 100% Load)")
     print(f"[*] Port TCP : {ctx.port} | Port UDP discovery: {DISCOVERY_PORT}")
     if ctx.slowdown > 1:
         print(f"[*] MODE UJI : slowdown x{ctx.slowdown}")
     if ctx.crash_after:
         print(f"[*] MODE UJI : crash pada task ke-{ctx.crash_after}")
-    print("=" * 62)
+    print(f"[*] Status   : Menunggu instruksi dari Master di port {ctx.port}...")
+    print("=" * 60)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

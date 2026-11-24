@@ -203,7 +203,7 @@ def get_local_subnets():
 def discover_workers(timeout=1.5):
     found = {}
     subnets = get_local_subnets()
-    print(f"[*] IP Master terdeteksi: {', '.join(s[2] for s in subnets)}")
+    print(f"[*] IP Master Terdeteksi: {', '.join(s[2] for s in subnets)}")
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -245,9 +245,9 @@ def get_workers(args):
             if info:
                 infos.append(info)
             else:
-                print(f"[-] {h} tidak merespons, dilewati")
+                print(f"[!] {h} tidak merespons, dilewati")
     else:
-        print("[*] Memindai Worker di jaringan LAN (UDP broadcast + TCP sweep)...")
+        print("[*] Memindai Worker di seluruh jaringan LAN (Auto-Discovery)...")
         infos = discover_workers()
     ws = [Worker(i) for i in infos]
     ws.sort(key=lambda w: (tuple(int(x) for x in w.ip.split(".")), w.port))
@@ -358,7 +358,7 @@ class Runner:
                 if probe(w.ip, w.port, 1.0):
                     with self.cond:
                         w.alive, w.dead_since = True, None
-                    self.log(f"[REJOIN] {w.label()} aktif kembali dan bergabung ke cluster")
+                    self.log(f"[✓] [REJOIN] {w.label()} aktif kembali dan bergabung ke cluster")
                     continue
                 self._check_all_dead()
                 time.sleep(REJOIN_INTERVAL)
@@ -378,7 +378,8 @@ class Runner:
     def _execute(self, w, task):
         st = self.stats[w.key]
         size = len(task["array"]) if task["kind"] == "sort" else sum(len(r) for r in task["runs"])
-        self.log(f"[DISPATCH] {task['id']} -> {w.label()} ({size:,} elemen)")
+        self.log(f"[+] [DISPATCH] TASK {task['id']} ({getattr(self, 'label', 'TASK')}) -> {w.label()} | "
+                 f"{size:,} elemen | {w.cores} core")
         t_disp = time.perf_counter()
         status, h, out, err = exchange(w, task, self.algo)
         t_done = time.perf_counter()
@@ -399,12 +400,12 @@ class Runner:
                     st["cpu"].append(h["cpu_avg"])
                 if h.get("mem_peak_mb"):
                     st["mem"] = max(st["mem"], h["mem_peak_mb"])
-                msg = (f"[OK] {task['id']} <- {w.label()} | rtt={rtt:.2f}s "
-                       f"compute={h.get('compute_time', 0):.2f}s")
+                msg = (f"[✓] TASK {task['id']} <- {w.label()} | rtt={rtt:.2f}s "
+                       f"compute={h.get('compute_time', 0):.2f}s | {size:,} elemen")
                 if task["id"] in self.fail_first:
                     rec = time.perf_counter() - self.fail_first[task["id"]]
                     self.recoveries.append(rec)
-                    msg += f" | RECOVERED dalam {rec:.2f}s sejak kegagalan terdeteksi"
+                    msg += f" | [RECOVERED] {rec:.2f}s sejak kegagalan terdeteksi"
                 self.log(msg)
             else:
                 self.n_failures += 1
@@ -413,19 +414,19 @@ class Runner:
                 if status == "worker_down":
                     w.alive, w.dead_since = False, time.time()
                     self.detects.append(rtt)
-                    self.log(f"[DOWN] {w.label()} terdeteksi mati setelah {rtt:.2f}s "
+                    self.log(f"[✗] [DOWN] {w.label()} terdeteksi mati setelah {rtt:.2f}s "
                              f"({err}) -> requeue {task['id']}")
                     while self.own[w.key]:                    # tugas statis worker ini -> pool bersama
                         self.pending.appendleft(self.own[w.key].pop())
                 else:
-                    self.log(f"[TASK-ERROR] {task['id']} di {w.label()}: {err}")
+                    self.log(f"[✗] [TASK-ERROR] {task['id']} di {w.label()}: {err}")
                 task["retry"] += 1
                 if task["retry"] > self.max_retries:
                     self.abort = f"Task {task['id']} gagal > {self.max_retries} kali: {err}"
                 else:
                     self.n_requeued += 1
                     self.pending.appendleft(task)
-                    self.log(f"[REQUEUE] {task['id']} percobaan {task['retry']}/{self.max_retries}")
+                    self.log(f"[!] [REQUEUE] {task['id']} percobaan {task['retry']}/{self.max_retries}")
             self.cond.notify_all()
 
 
@@ -515,37 +516,40 @@ def run_dist(data, workers, ref_ck, algo, schedule, merge, cpw, max_retries, ver
 # OUTPUT
 # =============================================================================
 def print_dist_summary(rec, snap1, t_p1, workers, n):
-    print("\n" + "=" * 70)
-    print("   HASIL DISTRIBUTED SORTING")
-    print("=" * 70)
-    print(f"  Konfigurasi : {rec['workers']} worker ({rec['total_cores']} core) | "
+    print("\n" + "=" * 68)
+    print("   [FASE 3: GATHER & REKAPITULASI] HASIL AKHIR CLUSTER")
+    print("=" * 68)
+    print(f"[*] Konfigurasi: {rec['workers']} worker ({rec['total_cores']} Core) | "
           f"schedule={rec['schedule']} | merge={rec['merge']} | chunk={rec['chunks']}")
-    print("  Per worker (fase sort):")
+    print("\n  Rincian Distribusi Pengerjaan (fase sort):")
     print(f"    {'worker':<34}{'task':>5}{'busy(s)':>9}{'compute':>9}{'selesai@':>10}{'CPU%':>7}")
     for w in workers:
         s = snap1[w.key]
         cpu = sum(s["cpu"]) / len(s["cpu"]) if s["cpu"] else None
         print(f"    {w.label():<34}{s['tasks']:>5}{s['busy']:>9.2f}{s['compute']:>9.2f}"
               f"{s['last_finish']:>10.2f}{fmt(cpu, '.0f'):>7}")
-    print("-" * 70)
-    print(f"  Fase sort+transfer   : {t_p1:.3f} s")
+    print("-" * 68)
+    print(f"  Total Elemen Diuji         : {n:,}")
+    print(f"  Total Worker / Core        : {rec['workers']} worker ({rec['total_cores']} Core)")
+    print(f"  Fase sort+transfer         : {t_p1:.3f} s")
     if rec["merge"] == "tiered":
-        print(f"  Fase merge di worker : {rec['t_tier']:.3f} s")
-    print(f"  Merge akhir (Master) : {rec['t_merge']:.3f} s  <- bagian serial (Amdahl)")
-    print(f"  TOTAL EXECUTION TIME : {rec['t_total']:.3f} s")
-    print(f"  Throughput           : {n / rec['t_total'] / 1e6:.2f} juta elemen/detik")
-    print(f"  Data dikirim/diterima: {rec['sent_mb']:.0f} MB / {rec['recv_mb']:.0f} MB")
-    print(f"  Imbalance (max/mean) : {fmt(rec['imbalance'], '.2f')}   (1.00 = seimbang) | "
+        print(f"  Fase merge di worker       : {rec['t_tier']:.3f} s")
+    print(f"  Merge akhir (Master)       : {rec['t_merge']:.3f} s  <- bagian serial (Amdahl)")
+    print(f"  TOTAL EXECUTION TIME       : {rec['t_total']:.3f} s")
+    print(f"  Throughput                 : {n / rec['t_total'] / 1e6:.2f} juta elemen/detik")
+    print(f"  Data dikirim/diterima      : {rec['sent_mb']:.0f} MB / {rec['recv_mb']:.0f} MB")
+    print(f"  Imbalance (max/mean)       : {fmt(rec['imbalance'], '.2f')} (1.00 = seimbang) | "
           f"idle rata-rata {fmt(rec['idle_pct'], '.1f')}%")
-    print(f"  CPU Master / Worker  : {fmt(rec['cpu_master_avg'], '.0f')}% / "
-          f"{fmt(rec['cpu_worker_avg'], '.0f')}%   | Mem Master puncak "
+    print(f"  CPU Master / Worker        : {fmt(rec['cpu_master_avg'], '.0f')}% / "
+          f"{fmt(rec['cpu_worker_avg'], '.0f')}% | Mem Master puncak "
           f"{fmt(rec['mem_master_peak_mb'], '.0f')} MB")
     if rec["failures"]:
-        print(f"  FAULT TOLERANCE      : {rec['failures']} kegagalan, {rec['requeued']} task di-requeue, "
-              f"deteksi maks {fmt(rec['detect_max_s'], '.2f')}s, "
-              f"recovery maks {fmt(rec['recovery_max_s'], '.2f')}s")
-    print(f"  VERIFIKASI           : {'LULUS (terurut, jumlah & checksum sama)' if rec['ok'] else '*** GAGAL ***'}")
-    print("=" * 70)
+        print(f"  FAULT TOLERANCE            : {rec['failures']} kegagalan, "
+              f"{rec['requeued']} task di-requeue, deteksi maks "
+              f"{fmt(rec['detect_max_s'], '.2f')}s, recovery maks "
+              f"{fmt(rec['recovery_max_s'], '.2f')}s")
+    print(f"  VERIFIKASI                 : {'LULUS (terurut, jumlah & checksum sama)' if rec['ok'] else '*** GAGAL ***'}")
+    print("=" * 68)
 
 
 def write_csv(path, rec, args, idx):
@@ -571,7 +575,10 @@ def write_csv(path, rec, args, idx):
 # MODE: seq / local / dist / bench
 # =============================================================================
 def cmd_seq(args, data, ref_ck):
-    print(f"[SEQUENTIAL] 1 proses | algo={args.algo} | N={args.n:,}")
+    print("=" * 68)
+    print("   [MODE SEQUENTIAL] BASELINE SATU PROSES")
+    print("=" * 68)
+    print(f"[*] Algoritma : {args.algo} | N={args.n:,} | repeat={args.repeat}")
     times = []
     for r in range(args.repeat):
         mon = Monitor(); mon.start()
@@ -581,15 +588,20 @@ def cmd_seq(args, data, ref_ck):
         cpu, mem = mon.finish()
         ok = is_sorted(out) and checksum(out) == ref_ck
         times.append(t)
-        print(f"  run {r + 1}: {t:.3f}s | ok={ok}")
+        print(f"  [✓] run {r + 1}: {t:.3f}s | ok={ok}")
         write_csv(args.csv, {"mode": "seq", "workers": 0, "t_total": t, "ok": ok,
                              "cpu_master_avg": cpu, "mem_master_peak_mb": mem}, args, r + 1)
-    print(f"[SEQUENTIAL] median = {statistics.median(times):.3f}s")
+    print("-" * 68)
+    print(f"[✓] SEQUENTIAL median = {statistics.median(times):.3f}s")
+    print("=" * 68)
     return statistics.median(times)
 
 
 def cmd_local(args, data, ref_ck):
-    print(f"[LOCAL PARALLEL] multiprocessing satu komputer | algo={args.algo} | N={args.n:,}")
+    print("=" * 68)
+    print("   [MODE LOCAL PARALLEL] MULTIPROCESSING SATU KOMPUTER")
+    print("=" * 68)
+    print(f"[*] Algoritma : {args.algo} | N={args.n:,} | procs={args.procs}")
     base = None
     for p in parse_int_list(args.procs):
         times = []
@@ -607,21 +619,31 @@ def cmd_local(args, data, ref_ck):
                                      "cpu_master_avg": cpu, "mem_master_peak_mb": mem}, args, r + 1)
         m = statistics.median(times)
         base = base or m
-        print(f"  p={p:<3} T={m:8.3f}s | S={base / m:5.2f} | E={base / m / p:5.2f} | ok={ok}")
+        print(f"  [✓] p={p:<3} T={m:8.3f}s | S={base / m:5.2f} | E={base / m / p:5.2f} | ok={ok}")
+    print("=" * 68)
 
 
 def cmd_dist(args, data, ref_ck):
     ws = get_workers(args)
     if not ws:
-        print("[-] Tidak ada worker. Jalankan python -m src.worker_sort di PC worker, atau pakai --hosts.")
+        print("[✗] Tidak ada worker. Jalankan python -m src.worker_sort di PC worker, atau pakai --hosts.")
         return
     if args.workers:
         ws = ws[:args.workers]
-    print(f"\n[+] {len(ws)} worker dipakai:")
+    print(f"\n[+] Siap Digunakan {len(ws)} Worker Komputasi:")
+    print("-" * 68)
     for i, w in enumerate(ws):
-        print(f"   [{i}] {w.label():<40} {w.cores} core")
+        print(f"  [{i}] Host: {w.label():<40} | Core: {w.cores:>2} Cores | (Client Jaringan LAN)")
+    print("-" * 68)
+    print(f"[*] Schedule={args.schedule} | merge={args.merge} | "
+          f"chunk/worker={args.chunks_per_worker} | repeat={args.repeat}")
     for r in range(args.repeat):
-        print(f"\n--- RUN {r + 1}/{args.repeat} ---")
+        print("\n" + "=" * 68)
+        print("   [FASE 1: SCATTER] PEMBAGIAN CHUNK KE WORKER")
+        print("   [FASE 2: PARALLEL COMPUTE] PROSES SERENTAK DI SEMUA WORKER")
+        print("=" * 68)
+        print("[*] Membagi chunk dan mengirim ke worker secara simultan...")
+        print("[*] Buka Task Manager / Ctrl+Shift+Esc di tiap PC untuk pantau CPU.")
         rec, snap1, t_p1 = run_dist(data, ws, ref_ck, args.algo, args.schedule, args.merge,
                                     args.chunks_per_worker, args.max_retries, True)
         print_dist_summary(rec, snap1, t_p1, ws, args.n)
@@ -641,8 +663,11 @@ def one_run(data, ws, ref_ck, args, schedule, merge, cpw=None):
 def cmd_bench(args, data, ref_ck):
     ws_all = get_workers(args)
     if not ws_all:
-        print("[-] Tidak ada worker.")
+        print("[✗] Tidak ada worker.")
         return
+    print("=" * 68)
+    print(f"   [MODE BENCHMARK] SUITE: {args.suite.upper()}")
+    print("=" * 68)
     print(f"[+] {len(ws_all)} worker tersedia | suite={args.suite} | repeat={args.repeat}")
     idx = 0
 
@@ -654,20 +679,20 @@ def cmd_bench(args, data, ref_ck):
             idx += 1
             write_csv(args.csv, rec, args, r + 1)
             recs.append(rec)
-            print(f"    run {r + 1}: {rec['t_total']:.3f}s ok={rec['ok']}")
+            print(f"  [✓] run {r + 1}: {rec['t_total']:.3f}s ok={rec['ok']}")
         return recs
 
     if args.suite == "scalability":
         seq_t = None
         if not args.skip_seq:
-            print("\n[baseline] sequential di Master ...")
+            print("\n[*] [baseline] sequential di Master ...")
             seq_t = cmd_seq(args, data, ref_ck)
         rows = []
         for W in parse_int_list(args.workers_list):
             if W > len(ws_all):
                 print(f"[!] Lewati W={W}: hanya {len(ws_all)} worker tersedia")
                 continue
-            print(f"\n[scalability] W={W}")
+            print(f"\n[*] [scalability] W={W}")
             recs = collect(ws_all[:W], "dynamic", args.merge)
             rows.append((W, sum(w.cores for w in ws_all[:W]), recs))
         t1 = next((med([r["t_total"] for r in recs]) for W, _, recs in rows if W == 1), None)
@@ -692,11 +717,11 @@ def cmd_bench(args, data, ref_ck):
 
     elif args.suite == "schedule":
         ws = ws_all[:args.workers] if args.workers else ws_all
-        print(f"\n[load balancing] {len(ws)} worker: STATIC vs DYNAMIC")
+        print(f"\n[*] [load balancing] {len(ws)} worker: STATIC vs DYNAMIC")
         print("Tip: jalankan salah satu worker dengan --slowdown 3 agar perbedaannya terlihat.")
         out = {}
         for sch in ("static", "dynamic"):
-            print(f"  -> {sch}")
+            print(f"  >> {sch}")
             out[sch] = collect(ws, sch, args.merge)
         print("\n" + "=" * 66)
         print(f"{'schedule':<10}{'T(s)':>9}{'imbalance':>11}{'idle%':>8}{'chunk':>7}{'ok':>5}")
@@ -709,10 +734,10 @@ def cmd_bench(args, data, ref_ck):
 
     elif args.suite == "granularity":
         ws = ws_all[:args.workers] if args.workers else ws_all
-        print(f"\n[granularity] {len(ws)} worker: chunk per worker = {args.cpw_list}")
+        print(f"\n[*] [granularity] {len(ws)} worker: chunk per worker = {args.cpw_list}")
         out = {}
         for c in parse_int_list(args.cpw_list):
-            print(f"  -> {c} chunk/worker")
+            print(f"  >> {c} chunk/worker")
             out[c] = collect(ws, "dynamic", args.merge, c)
         print("\n" + "=" * 78)
         print(f"{'chunk/w':>8}{'chunk':>7}{'T(s)':>9}{'fase1':>9}{'merge@M':>9}"
@@ -731,10 +756,10 @@ def cmd_bench(args, data, ref_ck):
 
     elif args.suite == "merge":
         ws = ws_all[:args.workers] if args.workers else ws_all
-        print(f"\n[merge] {len(ws)} worker: merge di Master vs merge bertingkat di worker")
+        print(f"\n[*] [merge] {len(ws)} worker: merge di Master vs merge bertingkat di worker")
         out = {}
         for mg in ("master", "tiered"):
-            print(f"  -> {mg}")
+            print(f"  >> {mg}")
             out[mg] = collect(ws, "dynamic", mg)
         print("\n" + "=" * 66)
         print(f"{'merge':<10}{'T(s)':>9}{'fase1':>9}{'tier':>8}{'merge@M':>9}{'ok':>5}")
@@ -789,9 +814,9 @@ def main():
     elif args.repeat < 1:
         ap.error("--repeat minimal 1")
 
-    print("=" * 70)
-    print("      DISTRIBUTED SORTING - MASTER NODE")
-    print("=" * 70)
+    print("=" * 68)
+    print("      DISTRIBUTED PARALLEL COMPUTING - SORTING (MASTER NODE)")
+    print("=" * 68)
     if args.dataset:
         n_req = parse_size(args.size) if args.size else 0
         print(f"[*] Memuat dataset publik: {args.dataset} (kolom={args.column or '-'})...")
