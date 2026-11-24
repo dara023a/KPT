@@ -208,7 +208,7 @@ def discover_workers(timeout=1.5):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         s.settimeout(0.2)
-        for b in ["255.255.255.255"] + [x[1] for x in subnets]:
+        for b in ["255.255.255.255", "<broadcast>"] + [x[1] for x in subnets]:
             try:
                 s.sendto(b"DISCOVER_WORKERS", (b, DISCOVERY_PORT))
             except Exception:

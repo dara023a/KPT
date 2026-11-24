@@ -75,23 +75,19 @@ Banner yang benar adalah `HEAVY PARALLEL WORKER NODE (MULTI-CORE READY)`. Pastik
 cd C:\path\ke\KPT
 git pull origin main
 python -m pip install -r requirements.txt
+```
 
-# ganti IP_W1 ... IP_W9 dengan IP worker kalian
-$ips = @(
-  "IP_W1",
-  "IP_W2",
-  "IP_W3",
-  "IP_W4",
-  "IP_W5",
-  "IP_W6",
-  "IP_W7",
-  "IP_W8",
-  "IP_W9"
-)
-$hosts = ($ips | ForEach-Object { "{0}:9998" -f $_ }) -join ","
+Deteksi worker otomatis sama seperti folder `kpt`: UDP broadcast port `9999` + TCP sweep port `9998`. Kalau semua worker satu subnet, tidak perlu menulis daftar IP. Pastikan saat Master dijalankan muncul `[+] Siap Digunakan 9 Worker Komputasi`.
 
-# cek tiap worker; harus mengembalikan dict dengan status 'ready'
-$ips | ForEach-Object { python -c "from src.master_sort import probe; print('$_', probe('$_',9998,2.0))" }
+```powershell
+python -m src.master_sort dist --dataset osm_java_lat.npy --shuffle --size 10m --timeout 10 --chunks-per-worker 8 --csv results/raw/demo_dist.csv
+```
+
+Jika ada worker yang tidak terdeteksi (beda subnet atau broadcast diblokir), baru pakai `--hosts`:
+
+```powershell
+$hosts = "IP_W1:9998,IP_W2:9998,IP_W3:9998,IP_W4:9998,IP_W5:9998,IP_W6:9998,IP_W7:9998,IP_W8:9998,IP_W9:9998"
+python -m src.master_sort dist --dataset osm_java_lat.npy --shuffle --size 10m --hosts $hosts --workers 9 --timeout 10 --chunks-per-worker 8 --csv results/raw/demo_dist.csv
 ```
 
 ### 3. Perintah demo video (maks 5 menit)
@@ -105,8 +101,8 @@ python -m src.master_sort seq --dataset osm_java_lat.npy --shuffle --size 10m --
 # b. Local parallel
 python -m src.master_sort local --dataset osm_java_lat.npy --shuffle --size 10m --procs 1,2,4,8 --repeat 1 --csv results/raw/demo_local.csv
 
-# c. Distributed 9 worker
-python -m src.master_sort dist --dataset osm_java_lat.npy --shuffle --size 10m --hosts $hosts --workers 9 --timeout 10 --chunks-per-worker 8 --csv results/raw/demo_dist.csv
+# c. Distributed 9 worker (auto-discovery seperti kpt)
+python -m src.master_sort dist --dataset osm_java_lat.npy --shuffle --size 10m --workers 9 --timeout 10 --chunks-per-worker 8 --csv results/raw/demo_dist.csv
 ```
 
 Dynamic load balancing: hentikan satu worker, jalankan ulang dengan `--slowdown 3`, lalu jalankan benchmark di Master.
@@ -117,7 +113,7 @@ $procs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
 python -m src.worker_sort --procs $procs --slowdown 3
 
 # di Master
-python -m src.master_sort bench --suite schedule --dataset osm_java_lat.npy --shuffle --size 5m --hosts $hosts --timeout 10 --repeat 1 --csv results/raw/demo_schedule.csv
+python -m src.master_sort bench --suite schedule --dataset osm_java_lat.npy --shuffle --size 5m --timeout 10 --repeat 1 --csv results/raw/demo_schedule.csv
 
 # setelah demo, kembalikan worker tanpa slowdown
 python -m src.worker_sort --procs $procs
@@ -131,7 +127,7 @@ $procs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
 python -m src.worker_sort --procs $procs --crash-after 2 --crash-delay 2
 
 # di Master
-python -m src.master_sort dist --dataset osm_java_lat.npy --shuffle --size 10m --hosts $hosts --workers 9 --timeout 10 --chunks-per-worker 8 --csv results/raw/demo_ft.csv
+python -m src.master_sort dist --dataset osm_java_lat.npy --shuffle --size 10m --workers 9 --timeout 10 --chunks-per-worker 8 --csv results/raw/demo_ft.csv
 
 # saat worker mati, jalankan lagi di PC tersebut
 python -m src.worker_sort --procs $procs
@@ -140,7 +136,7 @@ python -m src.worker_sort --procs $procs
 Scalability untuk laporan:
 
 ```powershell
-python -m src.master_sort bench --suite scalability --dataset osm_java_lat.npy --shuffle --size 5m --hosts $hosts --workers-list 1,2,4,6,9 --timeout 10 --repeat 1 --csv results/raw/demo_scalability.csv
+python -m src.master_sort bench --suite scalability --dataset osm_java_lat.npy --shuffle --size 5m --workers-list 1,2,4,6,9 --timeout 10 --repeat 1 --csv results/raw/demo_scalability.csv
 ```
 
 Untuk laporan, ulangi `seq`, `local`, `dist`, `bench --suite schedule`, dan `bench --suite scalability` dengan `--size 20m --repeat 3`.
@@ -149,7 +145,7 @@ Untuk laporan, ulangi `seq`, `local`, `dist`, `bench --suite schedule`, dan `ben
 
 1. **0:00-0:30** topologi 10 PC: tampilkan `hostname` dan `ipconfig` di Master + beberapa Worker.
 2. **0:30-1:00** banner 9 Worker (`HEAVY PARALLEL WORKER NODE ...`).
-3. **1:00-1:20** Master menampilkan daftar 9 Worker setelah probe.
+3. **1:00-1:20** Master menampilkan daftar 9 Worker hasil auto-discovery.
 4. **1:20-2:20** `dist` 9 Worker: rekam `[DISPATCH]`, `[✓] TASK`, `[FASE 3: GATHER ...]`, dan `VERIFIKASI LULUS`.
 5. **2:20-3:20** `bench --suite schedule` dengan satu Worker `--slowdown 3`.
 6. **3:20-4:30** fault tolerance: Worker `--crash-after 2`, rekam `[DOWN] -> [REQUEUE] -> [RECOVERED]`, lalu restart Worker untuk `[REJOIN]`.
